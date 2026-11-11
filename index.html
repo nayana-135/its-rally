@@ -303,9 +303,11 @@ th{font-size:12px;color:var(--muted);font-weight:500;letter-spacing:.02em}
 /* ---------- 기록 종류 ---------- */
 const KINDS = {
   sm:{label:'스매시',type:'w',atk:true,hint:'스매시가 그대로 득점으로 이어짐'},
-  dr:{label:'드롭·헤어핀',type:'w',atk:true,hint:'드롭, 헤어핀, 네트 앞 처리로 득점'},
+  dr:{label:'드롭·커트',type:'w',atk:true,hint:'드롭, 커트, 헤어핀 같은 네트 앞 처리로 득점'},
   pu:{label:'푸시·드라이브',type:'w',atk:true,hint:'푸시, 드라이브, 평행 공방에서 득점'},
-  ow:{label:'기타 득점',type:'w',atk:false,hint:'클리어, 서브 에이스 등 위에 없는 득점'},
+  cb:{label:'되치기',type:'w',atk:true,hint:'상대 공격을 받아쳐서(카운터) 그대로 득점'},
+  sr:{label:'서브 득점',type:'w',atk:false,hint:'서브가 그대로 득점으로 이어짐(서브 에이스)'},
+  ow:{label:'기타 득점',type:'w',atk:false,hint:'클리어 등 위에 없는 득점'},
   af:{label:'공격 실패',type:'e',atk:true,hint:'스매시나 푸시 같은 공격이 아웃되거나 네트에 걸림'},
   ou:{label:'아웃',type:'e',atk:false,hint:'공격이 아닌 샷이 라인 밖으로 나감'},
   ne:{label:'네트 걸림',type:'e',atk:false,hint:'공격이 아닌 샷이 네트에 걸림'},
@@ -313,11 +315,11 @@ const KINDS = {
   de:{label:'쉬운 공 놓침',type:'e',atk:false,hint:'상대 샷 없이 쉬운 공을 놓침. 상대 샷이 득점했다면 득점 샷과 빈틈(수비 실패)으로 기록'},
   ro:{label:'로테이션 혼선',type:'e',atk:false,hint:'서로 미루거나 같은 공을 쫓아 코트가 비어 버림'}
 };
-const W_KEYS = ['sm','dr','pu','ow'];
-const E_KEYS = ['af','ou','ne','sv','de','ro'];
+const W_KEYS = ['sm','dr','pu','cb','sr','ow'];
+const E_KEYS = ['ou','ne','sv','de']; /* af(공격 실패), ro(로테이션 혼선)는 입력칸에서만 뺐고 예전 기록은 그대로 읽어요 */
 const CAUSES = {
   df:{label:'수비 실패',hint:'스매시나 푸시를 상대가 받아내지 못함'},
-  pr:{label:'준비 안 됨',hint:'상대가 자세를 갖추지 못해 드롭·헤어핀에 반응이 늦음'},
+  pr:{label:'준비 안 됨',hint:'상대가 자세를 갖추지 못해 드롭·커트·헤어핀에 반응이 늦음'},
   hs:{label:'서브가 뜸',hint:'상대 서브가 떠서 푸시나 스매시로 받아침'},
   hr:{label:'리시브가 뜸',hint:'상대 리시브나 받아넘긴 공이 떠서 공격'},
   gp:{label:'빈 코트',hint:'상대 포지션이 비어 있는 곳을 공략'},
@@ -347,6 +349,7 @@ function normalize(x) {
     return {name:String(o.name || (i ? 'B팀' : 'A팀')), players:[String(pl[0] || DEF_NAMES[i*2]), String(pl[1] || DEF_NAMES[i*2+1])]};
   };
   const ev = (Array.isArray(m.events) ? m.events : [])
+    .map(e => (e && e.k === 'ct' ? Object.assign({}, e, {k:'dr'}) : e))
     .filter(e => e && KINDS[e.k] && Number.isInteger(e.p) && e.p >= 0 && e.p < 4 && Number.isInteger(e.g) && e.g >= 0)
     .map(e => {
       const o = {g:e.g, p:e.p, k:e.k};
@@ -1070,6 +1073,13 @@ function viewRecord(m) {
     : '';
   const nextAsk = S.confirm === 'next';
   return '<div class="matchline"><b>' + esc(m.title) + '</b><span>' + esc(m.date) + '</span></div>' +
+    '<details data-d="info"' + (S.infoOpen ? ' open' : '') + '><summary>경기 정보와 선수 이름</summary><div><div class="form">' +
+      '<label class="wide">경기 이름<input id="f-title" data-f="title" maxlength="30" value="' + esc(m.title) + '"' + (ro ? ' disabled' : '') + '></label>' +
+      '<label class="wide">날짜<input id="f-date" data-f="date" type="date" value="' + esc(m.date) + '"' + (ro ? ' disabled' : '') + '></label>' +
+      '<label>왼쪽 팀 이름<input id="f-ta" data-f="ta" maxlength="10" value="' + esc(m.teams[0].name) + '"' + (ro ? ' disabled' : '') + '></label>' +
+      '<label>오른쪽 팀 이름<input id="f-tb" data-f="tb" maxlength="10" value="' + esc(m.teams[1].name) + '"' + (ro ? ' disabled' : '') + '></label>' +
+      [0,1,2,3].map(p => '<label>' + esc(tn(m, teamOf(p))) + ' 선수 ' + (p % 2 + 1) + '<input id="f-p' + p + '" data-f="p' + p + '" maxlength="8" value="' + esc(pn(m, p)) + '"' + (ro ? ' disabled' : '') + '></label>').join('') +
+    '</div></div></details>' +
     '<div class="rules"><div class="ruleline"><span class="note">경기 종류</span><div class="seg" role="group" aria-label="경기 종류">' +
       [['practice', '연습경기'], ['match', '시합']].map(x => '<button data-act="mode" data-v="' + x[0] + '" data-fk="mode:' + x[0] + '" aria-pressed="' + (m.mode === x[0]) + '"' + (ro ? ' disabled' : '') + '>' + x[1] + '</button>').join('') + '</div></div>' +
       '<div class="ruleline"><span class="note">점수제</span><div class="seg" role="group" aria-label="점수제">' +
@@ -1083,9 +1093,10 @@ function viewRecord(m) {
     '<section class="section" aria-label="선수 선택"><p class="hint" aria-live="polite">' + hint + '</p><div class="players">' + col(0) + col(1) + '</div></section>' +
     '<section class="section" aria-label="랠리 결과">' +
       '<div class="group"><div class="group-h"><h3>득점</h3><span>고른 선수의 샷으로 점수를 땄어요</span></div><div class="chips">' + W_KEYS.map(chip).join('') + '</div>' +
+      (S.pk !== null ? (
         '<div class="group-h"><h3>상대의 빈틈</h3><span>득점 샷을 고른 뒤 선택해요</span></div><div class="chips c3">' + C_KEYS.map(cchip).join('') + '</div>' +
         '<div class="group-h"><h3>누구의 빈틈이었나요?</h3><span>고른 선수의 실수로 집계돼요</span></div><div class="chips c3">' + vchips + '</div>' +
-        '<button class="btn ghost" data-act="cause" data-c="" data-fk="cause:none"' + ((off || S.sel === null || S.pk === null) ? ' disabled' : '') + '>빈틈 없이 기록</button></div>' +
+        '<button class="btn ghost" data-act="cause" data-c="" data-fk="cause:none"' + ((off || S.sel === null || S.pk === null) ? ' disabled' : '') + '>빈틈 없이 기록</button>') : '') + '</div>' +
       '<div class="group"><div class="group-h"><h3>실수</h3><span>고른 선수의 실수로 점수를 내줬어요</span></div><div class="chips c3">' + E_KEYS.map(chip).join('') + '</div></div>' +
       '<div class="row-actions"><button class="btn ghost" data-act="undo" data-fk="undo"' + ((ro || !m.events.length) ? ' disabled' : '') + '>되돌리기</button>' +
       ((!done && !ro && m.events.some(e => e.g === m.game)) ? '<button class="btn ghost" data-act="next-ask" data-fk="next-ask">' + (nextAsk ? '한 번 더 누르면 게임을 끝내요' : '게임 끝내고 다음으로') + '</button>' : '') + '</div></section>' +
@@ -1096,13 +1107,6 @@ function viewRecord(m) {
           '<span class="tag ' + K.type + '">' + (K.type === 'w' ? '득점' : '실수') + '</span><div class="sub">' + (r.e.g + 1) + '게임 · ' + esc(tn(m, wt)) + ' 득점' + (r.e.c ? ' · ' + (r.e.v !== undefined ? esc(pn(m, r.e.v)) + ' ' : '상대 ') + CAUSES[r.e.c].label : '') + '</div></div>' +
           (ro ? '<span></span>' : '<button class="btn ghost sm" data-act="del" data-i="' + r.i + '" aria-label="이 기록 삭제">삭제</button>') + '</li>';
       }).join('') + '</ul>' : '<p class="note">아직 기록이 없어요. 위에서 선수와 결과를 눌러 첫 랠리를 남겨 보세요.</p>') + '</section>' +
-    '<details data-d="info"' + (S.infoOpen ? ' open' : '') + '><summary>경기 정보와 선수 이름</summary><div><div class="form">' +
-      '<label class="wide">경기 이름<input id="f-title" data-f="title" maxlength="30" value="' + esc(m.title) + '"' + (ro ? ' disabled' : '') + '></label>' +
-      '<label class="wide">날짜<input id="f-date" data-f="date" type="date" value="' + esc(m.date) + '"' + (ro ? ' disabled' : '') + '></label>' +
-      '<label>왼쪽 팀 이름<input id="f-ta" data-f="ta" maxlength="10" value="' + esc(m.teams[0].name) + '"' + (ro ? ' disabled' : '') + '></label>' +
-      '<label>오른쪽 팀 이름<input id="f-tb" data-f="tb" maxlength="10" value="' + esc(m.teams[1].name) + '"' + (ro ? ' disabled' : '') + '></label>' +
-      [0,1,2,3].map(p => '<label>' + esc(tn(m, teamOf(p))) + ' 선수 ' + (p % 2 + 1) + '<input id="f-p' + p + '" data-f="p' + p + '" maxlength="8" value="' + esc(pn(m, p)) + '"' + (ro ? ' disabled' : '') + '></label>').join('') +
-    '</div></div></details>' +
     '<details data-d="rules"><summary>기록 기준</summary><div>' +
       '<p class="note">랠리를 끝낸 샷 하나만 기록해요. 득점은 점수를 딴 선수, 실수는 점수를 내준 선수를 고르세요. 득점 샷에는 상대에게 있었던 빈틈과 그 빈틈이 있던 선수도 함께 남길 수 있고, 그러면 그 선수의 실수로 집계돼요. 연습경기는 듀스가 있어서 21점 또는 25점에 먼저 도달하고 2점 차 이상이어야 게임이 끝나요. 29–29가 되면 30점을 먼저 얻는 쪽이 이겨요. 시합은 듀스가 없어서 21점 또는 25점을 먼저 얻으면 바로 끝나요.</p>' +
       '<dl class="kinds">' + W_KEYS.concat(E_KEYS).map(k => '<dt class="' + KINDS[k].type + '">' + KINDS[k].label + '</dt><dd>' + esc(KINDS[k].hint) + '</dd>').join('') + C_KEYS.map(c => '<dt>' + CAUSES[c].label + '</dt><dd>빈틈: ' + esc(CAUSES[c].hint) + '</dd>').join('') + '</dl></div></details>';
@@ -1147,7 +1151,7 @@ function viewAnalysis(m) {
       const gap = keys.filter(k => k[0].indexOf('g_') === 0).map(k => esc(CAUSES[k[0].slice(2)].label) + ' ' + k[1]).join(' · ');
       return '<dt>' + esc(pn(m, p)) + '</dt><dd>' + (keys.length ? (dir ? '직접: ' + dir : '') + (dir && gap ? '<br>' : '') + (gap ? '빈틈: ' + gap : '') : '실수 없음') + '</dd>';
     }).join('') + '</dl></div>' +
-    '<div class="section"><h2>공격 성공률</h2>' + atk + '<p class="note">공격 득점(스매시, 드롭, 푸시)을 공격 득점과 공격 실패의 합으로 나눴어요. 랠리를 끝낸 공격만 세기 때문에 상대가 받아낸 뒤 이어진 랠리는 들어가지 않아요. 표본이 적을 때는 참고만 하세요.</p></div>' +
+    '<div class="section"><h2>공격 성공률</h2>' + atk + '<p class="note">공격 득점(스매시, 드롭·커트, 푸시, 되치기)을 공격 득점과 공격 실패의 합으로 나눴어요. 랠리를 끝낸 공격만 세기 때문에 상대가 받아낸 뒤 이어진 랠리는 들어가지 않아요. 표본이 적을 때는 참고만 하세요.</p></div>' +
     '<div class="section"><h2>실수 유형</h2><p class="note">모든 실점을 실수로 보고 한 목록에 모았어요. 아웃이나 네트 걸림 같은 직접 실수와, 상대 공격이 먹힌 이유(수비 실패, 준비 안 됨, 서브가 뜸 등)가 함께 나와요. 상대 공격으로 난 점수에는 그 득점 샷을 아래에 적었어요.</p>' + mist + '</div>' +
     '<div class="section"><h2>점수 흐름</h2>' + flowSvg(m, A) + '<p class="note">선이 0보다 위에 있으면 ' + esc(tn(m, 0)) + ', 아래에 있으면 ' + esc(tn(m, 1)) + '가 앞서는 구간이에요. 점이 찍힌 곳이 각 게임의 마지막 랠리예요.</p></div>';
 }
